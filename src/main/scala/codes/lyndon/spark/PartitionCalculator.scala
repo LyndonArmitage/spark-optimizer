@@ -10,7 +10,7 @@ import scala.math.{max, min}
   * Utility class for calculating the number of partitions a DataFrame should
   * have based on the average size of the data within it.
   */
-object DynamicPartitionCalculator {
+object PartitionCalculator {
 
   @transient
   private[this] val logger: Logger = LoggerFactory.getLogger(getClass)
