@@ -1,9 +1,15 @@
 package codes.lyndon.spark
 
 case class DynamicPartitionOptions(
-    maxSizePerPartition: Option[Long] = Some(DynamicPartitionDefaults.maxSizePerPartition),
-    maxTotalPartitions: Option[Int] = Some(DynamicPartitionDefaults.maxTotalPartitions),
-    minTotalPartitions: Option[Int] = Some(DynamicPartitionDefaults.minTotalPartitions),
+    maxSizePerPartition: Option[Long] = Some(
+      DynamicPartitionDefaults.maxSizePerPartition
+    ),
+    maxTotalPartitions: Option[Int] = Some(
+      DynamicPartitionDefaults.maxTotalPartitions
+    ),
+    minTotalPartitions: Option[Int] = Some(
+      DynamicPartitionDefaults.minTotalPartitions
+    ),
     executorsPerNode: Option[Int] = Some(8),
     clusterNodes: Option[Int] = Some(1)
 )

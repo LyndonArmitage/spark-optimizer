@@ -1,52 +1,55 @@
 package codes.lyndon.spark
 
-import org.apache.spark.sql.functions.{ avg, col }
-import org.apache.spark.sql.{ DataFrame, Row }
+import org.apache.spark.sql.functions.{avg, col}
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.util.SizeEstimator
-import org.slf4j.{ Logger, LoggerFactory }
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.math.BigDecimal.RoundingMode
-import scala.math.{ ceil, max, min }
+import scala.math.{ceil, max, min}
 
 /**
- * Utility class for calculating the number of partitions a DataFrame should
- * have based on the average size of the data within it.
- */
+  * Utility class for calculating the number of partitions a DataFrame should
+  * have based on the average size of the data within it.
+  */
 object DynamicPartitionCalculator {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * Calculate the partitions required for a given DataFrame using the given
-   * options. This method invokes [[guessPartitionCount()]] see that method
-   * for more details on how this is achieved.
-   *
+    * Calculate the partitions required for a given DataFrame using the given
+    * options. This method invokes [[guessPartitionCount()]] see that method
+    * for more details on how this is achieved.
+    *
    * @param dataFrame The DataFrame to calculate the partitions count for
-   * @param options The options to use
-   * @return The estimated dynamic partition count
-   */
-  def apply(dataFrame: DataFrame, options: DynamicPartitionOptions): Int =
+    * @param options The options to use
+    * @return The estimated dynamic partition count
+    */
+  def apply(
+      dataFrame: DataFrame,
+      options: DynamicPartitionOptions = DynamicPartitionOptions()
+  ): Int =
     guessPartitionCount(dataFrame, options)
 
   /**
-   * <p>
-   * Calculate the partitions required for a given DataFrame using the given
-   * options.
-   * </p>
-   * <p>
-   * This method involves getting a count of all rows, sampling some rows for
-   * their size and attempting to fit a number of them within each partition
-   * based on the options given.
-   * </p>
-   * <p>
-   * <b>Note:</b> This method assumes all data within the DataFrame given will
-   * be partitioned evenly so will not work well if your data is heavily skewed.
-   * </p>
-   *
+    * <p>
+    * Calculate the partitions required for a given DataFrame using the given
+    * options.
+    * </p>
+    * <p>
+    * This method involves getting a count of all rows, sampling some rows for
+    * their size and attempting to fit a number of them within each partition
+    * based on the options given.
+    * </p>
+    * <p>
+    * <b>Note:</b> This method assumes all data within the DataFrame given will
+    * be partitioned evenly so will not work well if your data is heavily skewed.
+    * </p>
+    *
    * @param dataFrame The DataFrame to calculate the partitions count for
-   * @param options The options to use
-   * @return The estimated dynamic partition count
-   */
+    * @param options The options to use
+    * @return The estimated dynamic partition count
+    */
   def guessPartitionCount(
       dataFrame: DataFrame,
       options: DynamicPartitionOptions
@@ -70,17 +73,17 @@ object DynamicPartitionCalculator {
     // TODO: Consider caching the DataFrame
 
     val sampleFraction = calculateSampleFraction(totalRowCount)
-    val sampleCount = totalRowCount * sampleFraction
-    val rowSize = getAverageRowSize(dataFrame, sampleFraction)
+    val sampleCount    = totalRowCount * sampleFraction
+    val rowSize        = getAverageRowSize(dataFrame, sampleFraction)
     logger.debug(
       s"With a sample fraction of $sampleFraction ($sampleCount) the average row is $rowSize bytes"
     )
 
-    val totalSize = BigDecimal(totalRowCount) * rowSize
+    val totalSize               = BigDecimal(totalRowCount) * rowSize
     val sizePerCurrentPartition = (totalSize / currentPartitions).toLong
     logger.debug(
       s"Currently $currentPartitions partitions should be roughly " +
-      s"$sizePerCurrentPartition bytes each (assuming no skew)"
+        s"$sizePerCurrentPartition bytes each (assuming no skew)"
     )
 
     val recommendedPartitionCount =
@@ -88,7 +91,7 @@ object DynamicPartitionCalculator {
 
     logger.debug(
       s"$recommendedPartitionCount Recommended partitions to achieve " +
-      s"partitions $maxSizePerPartition bytes in size"
+        s"partitions $maxSizePerPartition bytes in size"
     )
 
     val newPartitions = max(
@@ -99,7 +102,9 @@ object DynamicPartitionCalculator {
       minTotalPartitions
     )
 
-    logger.debug(s"Will use $newPartitions partitions (adjusted for min and max)")
+    logger.debug(
+      s"Will use $newPartitions partitions (adjusted for min and max)"
+    )
     newPartitions
   }
 
@@ -113,7 +118,7 @@ object DynamicPartitionCalculator {
 
     // The basic idea is that we map the increasing row count to a decreasing
     // sample fraction.
-    val lowerBound = min(rowCountRange._1, rowCountRange._2)
+    val lowerBound      = min(rowCountRange._1, rowCountRange._2)
     val outerLowerBound = max(rowCountRange._1, rowCountRange._2)
 
     val minSampleSize = min(sampleRange._1, sampleRange._2)
@@ -129,8 +134,8 @@ object DynamicPartitionCalculator {
       // https://rosettacode.org/wiki/Map_range
       // The idea is to smooth out the boundary
       maxSampleSize +
-      (totalRowCount - lowerBound) *
-      (minSampleSize - maxSampleSize) / (outerLowerBound - lowerBound)
+        (totalRowCount - lowerBound) *
+          (minSampleSize - maxSampleSize) / (outerLowerBound - lowerBound)
     }
   }
 
@@ -149,21 +154,21 @@ object DynamicPartitionCalculator {
         rows => rows.map(row => getRowSizeInBytes(row))
       )
     // Get the average row size from the sample we have been using
-    val agg = rowsSizes.agg(avg(col(rowsSizes.columns.head)))
+    val agg   = rowsSizes.agg(avg(col(rowsSizes.columns.head)))
     val value = agg.head().getDouble(0)
     // Round up the result to be conservative in the estimates
     ceil(value).toLong
   }
 
   /**
-   * Get the size of a row in bytes
-   * @param row The row to get the size of
-   * @return The row size in bytes.
-   *         This may not be wholly accurate depending upon the types used
-   *         within the row.
-   *         It also does not take into account any kind of compression that
-   *         may happen at read/write level (e.g. snappy compression in Parquet).
-   */
+    * Get the size of a row in bytes
+    * @param row The row to get the size of
+    * @return The row size in bytes.
+    *         This may not be wholly accurate depending upon the types used
+    *         within the row.
+    *         It also does not take into account any kind of compression that
+    *         may happen at read/write level (e.g. snappy compression in Parquet).
+    */
   private def getRowSizeInBytes(row: Row): Long = {
     var total = 0L
     for (i <- 0 until row.length) {
@@ -204,9 +209,15 @@ object DynamicPartitionCalculator {
         _
       ) = optionalOptions
       Options(
-        maxSizePerPartition.getOrElse(DynamicPartitionDefaults.maxSizePerPartition),
-        maxTotalPartitions.getOrElse(DynamicPartitionDefaults.maxTotalPartitions),
-        minTotalPartitions.getOrElse(DynamicPartitionDefaults.minTotalPartitions)
+        maxSizePerPartition.getOrElse(
+          DynamicPartitionDefaults.maxSizePerPartition
+        ),
+        maxTotalPartitions.getOrElse(
+          DynamicPartitionDefaults.maxTotalPartitions
+        ),
+        minTotalPartitions.getOrElse(
+          DynamicPartitionDefaults.minTotalPartitions
+        )
       )
     }
   }
