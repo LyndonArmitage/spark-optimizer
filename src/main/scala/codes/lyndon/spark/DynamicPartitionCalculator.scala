@@ -14,7 +14,7 @@ import scala.math.{ceil, max, min}
   */
 object DynamicPartitionCalculator {
 
-  private val logger: Logger = LoggerFactory.getLogger(getClass)
+  private[this] val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
     * Calculate the partitions required for a given DataFrame using the given
@@ -55,11 +55,13 @@ object DynamicPartitionCalculator {
       options: DynamicPartitionOptions
   ): Int = {
     // Convert the given user options into our own internal vars for use
-    val Options(
+    val DynamicPartitionOptions(
       maxSizePerPartition,
       maxTotalPartitions,
-      minTotalPartitions
-    ) = Options.from(options)
+      minTotalPartitions,
+      executorsPerNode,
+      clusterNodes
+    ) = options
 
     val currentPartitions = dataFrame.rdd.getNumPartitions
     logger.debug(s"Currently there are $currentPartitions partitions")
@@ -191,34 +193,4 @@ object DynamicPartitionCalculator {
     total
   }
 
-  // This is so we can do some nice Scala things with the Options given to this
-  // object
-  private case class Options(
-      maxSizePerPartition: Long,
-      maxTotalPartitions: Int,
-      minTotalPartitions: Int
-  )
-
-  private object Options {
-    def from(optionalOptions: DynamicPartitionOptions): Options = {
-      val DynamicPartitionOptions(
-        maxSizePerPartition,
-        maxTotalPartitions,
-        minTotalPartitions,
-        _,
-        _
-      ) = optionalOptions
-      Options(
-        maxSizePerPartition.getOrElse(
-          DynamicPartitionDefaults.maxSizePerPartition
-        ),
-        maxTotalPartitions.getOrElse(
-          DynamicPartitionDefaults.maxTotalPartitions
-        ),
-        minTotalPartitions.getOrElse(
-          DynamicPartitionDefaults.minTotalPartitions
-        )
-      )
-    }
-  }
 }
