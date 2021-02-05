@@ -17,8 +17,6 @@ object DynamicPartitionCalculator {
   case class PartitionRecommendations(
       estimatedTotalSize: BigInt,
       maxSizePerPartition: Long,
-      currentPartitions: Int,
-      currentEstimatedSizePerPartition: Long,
       recommendedPartitionCount: Int,
       alignedRecommendedPartitionCount: Int
   )
@@ -63,9 +61,6 @@ object DynamicPartitionCalculator {
       options: DynamicPartitionOptions,
       sampleSize: Int = 10000
   ): PartitionRecommendations = {
-    import DataFrameEstimator._
-    import dataFrame.sparkSession.implicits._
-
     // Convert the given user options into our own internal vars for use
     val DynamicPartitionOptions(
       maxSizePerPartition,
@@ -74,8 +69,6 @@ object DynamicPartitionCalculator {
       executorsPerNode,
       clusterNodes
     ) = options
-
-    val totalExecutors = executorsPerNode * clusterNodes
 
     val currentPartitions = dataFrame.rdd.getNumPartitions
     logger.debug(s"Currently there are $currentPartitions partitions")
@@ -86,25 +79,35 @@ object DynamicPartitionCalculator {
     // value
     val totalRowCount = dataFrame.count()
     logger.debug(s"$totalRowCount total rows")
-    // TODO: Consider caching the DataFrame
 
-    val rowSizeDf = dataFrame.sampleRowSize(sampleSize, totalRowCount)
-    val rowSize   = rowSizeDf.select($"max".cast(LongType)).head().getLong(0)
+    val rowSize = getRowSize(dataFrame, sampleSize, totalRowCount)
 
-    val totalSize               = BigInt(totalRowCount) * rowSize
-    val sizePerCurrentPartition = (totalSize / currentPartitions).toLong
-    logger.debug(
-      s"Currently $currentPartitions partitions should be roughly " +
-        s"$sizePerCurrentPartition bytes each (assuming no skew)"
+    recommend(
+      totalRowCount,
+      rowSize,
+      maxSizePerPartition,
+      maxTotalPartitions,
+      minTotalPartitions,
+      executorsPerNode,
+      clusterNodes
     )
+
+  }
+
+  def recommend(
+      totalRowCount: Long,
+      rowSize: Long,
+      maxSizePerPartition: Long,
+      maxTotalPartitions: Int,
+      minTotalPartitions: Int,
+      executorsPerNode: Int,
+      clusterNodes: Int
+  ): PartitionRecommendations = {
+    val totalExecutors = executorsPerNode * clusterNodes
+    val totalSize      = BigInt(totalRowCount) * rowSize
 
     val recommendedPartitionCount =
       (totalSize / maxSizePerPartition).toInt
-
-    logger.debug(
-      s"$recommendedPartitionCount Recommended partitions to achieve " +
-        s"partitions $maxSizePerPartition bytes in size"
-    )
 
     val newPartitions = max(
       min(
@@ -114,26 +117,27 @@ object DynamicPartitionCalculator {
       minTotalPartitions
     )
 
-    logger.debug(
-      s"$newPartitions partitions (adjusted for min and max)"
-    )
-
     // Adjust to align with executors available
     val unusedExecutors      = newPartitions % totalExecutors
     val alignedNewPartitions = newPartitions + unusedExecutors
-    logger.debug(
-      s"Aligned to $alignedNewPartitions based on $totalExecutors total executors"
-    )
 
     PartitionRecommendations(
       totalSize,
       maxSizePerPartition,
-      currentPartitions,
-      sizePerCurrentPartition,
       newPartitions,
       alignedNewPartitions
     )
+  }
 
+  private def getRowSize(
+      df: DataFrame,
+      sampleSize: Int,
+      rowCount: Long
+  ): Long = {
+    import DataFrameEstimator._
+    import df.sparkSession.implicits._
+    val rowSizeDf = df.sampleRowSize(sampleSize, rowCount)
+    rowSizeDf.select($"max".cast(LongType)).head().getLong(0)
   }
 
 }
