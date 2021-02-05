@@ -63,9 +63,7 @@ object DataFrameEstimator {
 
   }
 
-  implicit class DataFrameUtils(
-      dataFrame: DataFrame
-  ) {
+  implicit class DataFrameUtils(dataFrame: DataFrame) {
 
     /**
       * Returns a sample of this DataFrame at the given size.
@@ -127,20 +125,7 @@ object DataFrameEstimator {
     def estimatedRowSize(hints: (String, SizeHint)*): Long = {
       if (dataFrame.isEmpty) return 0L
       val schema = dataFrame.schema
-      schema.map { field =>
-        val defaultSize = field.dataType.defaultSize
-        val fieldHints  = hints.filter(_._1 == field.name).map(_._2)
-        if (fieldHints.nonEmpty) {
-          val calculations = fieldHints.flatMap(_.calculate(field))
-          if (calculations.nonEmpty) {
-            calculations.max.ceil.toLong
-          } else {
-            defaultSize
-          }
-        } else {
-          defaultSize
-        }
-      }.sum
+      schema.estimateSize(hints: _*)
     }
 
     /**
@@ -152,9 +137,9 @@ object DataFrameEstimator {
       *                   matched as close as possible see [[sampleRowSize()]]
       *                   for more information
       * @param totalRowCount The count of rows in this DataFrame, by default
-     *                      this is got using a count() operation but can be
-     *                      supplied to avoid multiple count operations or given
-     *                      as an estimate.
+      *                      this is got using a count() operation but can be
+      *                      supplied to avoid multiple count operations or given
+      *                      as an estimate.
       * @return A DataFrame containing the stats on the sampled row sizes in bytes
       */
     def sampleRowSize(
@@ -212,6 +197,42 @@ object DataFrameEstimator {
         var_pop("size").as("var_pop")
       )
     }
+
+  }
+
+  implicit class StructTypeUtils(structType: StructType) {
+
+    /**
+      * Estimates the size of this struct in bytes based on the schema.
+      * @return The size estimate in bytes
+      */
+    def estimateSize: Long = estimateSize()
+
+    /**
+      * Estimates the size of this struct in bytes based on the schema and user
+      * given hints for column estimates (optional).
+      *
+     * @param hints The hints to use if any as a tuple of field name to hint.
+      *
+     *              If multiple hints are given for a single field the one that
+      *              returns the maximum is used
+      * @return The size estimate in bytes
+      */
+    def estimateSize(hints: (String, SizeHint)*): Long =
+      structType.map { field =>
+        val defaultSize = field.dataType.defaultSize
+        val fieldHints  = hints.filter(_._1 == field.name).map(_._2)
+        if (fieldHints.nonEmpty) {
+          val calculations = fieldHints.flatMap(_.calculate(field))
+          if (calculations.nonEmpty) {
+            calculations.max.ceil.toLong
+          } else {
+            defaultSize
+          }
+        } else {
+          defaultSize
+        }
+      }.sum
 
   }
 }
