@@ -159,10 +159,10 @@ object PartitionCalculator {
       totalRowCount: Long,
       rowSizeBytes: Long,
       maxSizePerPartitionBytes: Long = _128MiB,
-      maxTotalPartitions: Int,
-      minTotalPartitions: Int,
-      executorsPerNode: Int,
-      clusterNodes: Int
+      maxTotalPartitions: Int = Default.maxTotalPartitions,
+      minTotalPartitions: Int = Default.minTotalPartitions,
+      executorsPerNode: Int = Default.executorsPerNode,
+      clusterNodes: Int = Default.clusterNodes
   ): PartitionRecommendations = {
     val totalExecutors: Int = executorsPerNode * clusterNodes
     val totalSize: Long     = totalRowCount * rowSizeBytes
@@ -179,8 +179,10 @@ object PartitionCalculator {
     )
 
     // Adjust to align with executors available
-    val unusedExecutors      = newPartitions % totalExecutors
-    val alignedNewPartitions = newPartitions + unusedExecutors
+    val alignedNewPartitions = (
+      math.ceil(newPartitions.toDouble / totalExecutors.toDouble) 
+      * totalExecutors
+    ).toInt
 
     PartitionRecommendations(
       totalSize,
@@ -200,6 +202,45 @@ object PartitionCalculator {
     import df.sparkSession.implicits._
     val rowSizeDf = df.sampleRowSize(sampleSize, rowCount)
     rowSizeDf.select($"max".cast(LongType)).head().getLong(0)
+  }
+
+  def main(args: Array[String]): Unit = {
+
+    if (args.length < 4) {
+      println("Missing arguments:")
+      println("arg 1: row count")
+      println("arg 2: row size (in bytes)")
+      println("arg 3: executors per node")
+      println("arg 4: nodes")
+      println("e.g. 100000 1024 2 8")
+      return
+    }
+
+    val rowCount = args(0).toLong
+    val rowSize = args(1).toLong
+    val executorsPerNode = args(2).toInt
+    val clusterNodes = args(3).toInt
+
+
+    val recommendation = recommend(
+      totalRowCount = rowCount,
+      rowSizeBytes = rowSize,
+      executorsPerNode = executorsPerNode,
+      clusterNodes = clusterNodes
+    )
+    val totalExecutors = executorsPerNode * clusterNodes
+
+    println(s"$rowCount total rows")
+    println(s"1 row = $rowSize bytes")
+    println(s"total size = ${recommendation.estimatedTotalSize} bytes")
+    println(
+      s"$clusterNodes nodes each with $executorsPerNode executors for total of " +
+        s"$totalExecutors executors"
+    )
+    println(s"Recommended partition count is ${recommendation.recommendedPartitionCount}")
+    println(
+      s"Recommended partition count aligned to executors is ${recommendation.alignedRecommendedPartitionCount}"
+    )
   }
 
 }
