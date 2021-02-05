@@ -13,9 +13,9 @@ import scala.util.Try
 object DataFrameEstimator {
 
   /**
-   * Size hints for [[DataFrameUtils.estimatedRowSize()]]
-   * @see [[DataFrameUtils.estimatedRowSize()]]
-   */
+    * Size hints for [[DataFrameUtils.estimatedRowSize()]]
+    * @see [[DataFrameUtils.estimatedRowSize()]]
+    */
   sealed trait SizeHint {
     def calculate(field: StructField): Option[Long]
   }
@@ -151,18 +151,22 @@ object DataFrameEstimator {
       * @param sampleSize The sample size to get row sizes from, this will be
       *                   matched as close as possible see [[sampleRowSize()]]
       *                   for more information
+      * @param totalRowCount The count of rows in this DataFrame, by default
+     *                      this is got using a count() operation but can be
+     *                      supplied to avoid multiple count operations or given
+     *                      as an estimate.
       * @return A DataFrame containing the stats on the sampled row sizes in bytes
       */
     def sampleRowSize(
-        sampleSize: Int = 10000
+        sampleSize: Int = 10000,
+        totalRowCount: Long = dataFrame.count()
     ): DataFrame = {
       if (sampleSize <= 0 || dataFrame.isEmpty)
         return dataFrame.sparkSession.emptyDataFrame
 
       import dataFrame.sparkSession.implicits._
 
-      val totalRowCount = dataFrame.count()
-      val sample        = dataFrame.sampleSized(sampleSize, rowCount = totalRowCount)
+      val sample = dataFrame.sampleSized(sampleSize, rowCount = totalRowCount)
 
       val schema = dataFrame.schema.zipWithIndex
 

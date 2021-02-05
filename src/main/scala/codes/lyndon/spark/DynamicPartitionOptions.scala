@@ -14,6 +14,11 @@ case class DynamicPartitionOptions(
 object DynamicPartitionOptions {
 
   /**
+    * 128MiB in Bytes
+    */
+  val _128MiB: Long = 128L * 1024L * 1024L
+
+  /**
     * Default option values
     */
   object Default {
@@ -21,7 +26,7 @@ object DynamicPartitionOptions {
     /**
       * Approximately 128 Megabytes
       */
-    val maxSizePerPartition: Long = 128 * 1000 * 1000
+    val maxSizePerPartition: Long = _128MiB
 
     /**
       * 100,000 partitions seems reasonable as when combined with the above
