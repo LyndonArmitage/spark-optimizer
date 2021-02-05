@@ -16,5 +16,3 @@ scalacOptions ++= Seq(
   "-Xfatal-warnings"
 )
 
-coverageEnabled := true
-
