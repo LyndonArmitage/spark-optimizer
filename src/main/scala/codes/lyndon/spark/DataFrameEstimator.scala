@@ -5,10 +5,63 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.util.SizeEstimator
 
-
 import scala.util.Try
 
+/**
+  * Code for estimating and profiling DataFrame sizes for tuning jobs.
+  */
 object DataFrameEstimator {
+
+  /**
+   * Size hints for [[DataFrameUtils.estimatedRowSize()]]
+   * @see [[DataFrameUtils.estimatedRowSize()]]
+   */
+  sealed trait SizeHint {
+    def calculate(field: StructField): Option[Long]
+  }
+
+  object SizeHint {
+
+    /**
+      * Hint describing the given field as having a fixed size
+      * @param size The fixed size
+      */
+    case class FixedSize(size: Long) extends SizeHint {
+      override def calculate(field: StructField): Option[Long] = Some(size)
+    }
+
+    /**
+      * Hint for fields that are variable in length.
+      *
+     * The result will be a calculation based on the estimated number of
+      * entries.
+      *
+     * This supports the following types:
+      * <ul>
+      * <li>StringType</li>
+      * <li>ArrayType</li>
+      * <li>MapType</li>
+      * </ul>
+      * @param estimatedEntries The estimated number of entries for this field
+      */
+    case class LengthHint(estimatedEntries: Int) extends SizeHint {
+      override def calculate(field: StructField): Option[Long] = {
+        field.dataType match {
+          case _: StringType =>
+            Some(math.max(StringType.defaultSize, 2 * estimatedEntries))
+          case arr: ArrayType =>
+            Some(arr.elementType.defaultSize * estimatedEntries)
+          case map: MapType =>
+            Some(
+              (map.keyType.defaultSize + map.valueType.defaultSize)
+                * estimatedEntries
+            )
+          case _ => None
+        }
+      }
+    }
+
+  }
 
   implicit class DataFrameUtils(
       dataFrame: DataFrame
@@ -42,20 +95,52 @@ object DataFrameEstimator {
       *
      * If the DataFrame is empty this will return 0.
       *
-      * <b>Important Note:</b> This is <i>not</i> a very accurate way of getting
+      * <b>Important Note:</b> This is <i>not</i> a very accurate way of
       * estimating a row size as the default estimated values will be very small
       * and inaccurate for non-primitive types like String and Array etc.
       * You should favour sampling the DataFrame row size with
       * [[sampleRowSize()]] to get a more accurate view
       * (including this estimate).
+      * @return The row size estimate in bytes, 0 if the DataFrame was empty
+      *         @see [[estimatedRowSize()]]
+      */
+    def estimatedRowSize: Long = estimatedRowSize()
+
+    /**
+      * Estimates the row size in bytes based on the DataFrame's schema and user
+      * given hints for column estimates (optional).
       *
-     *
+     * If the DataFrame is empty this will return 0.
+      *
+      * <b>Important Note:</b> This is still <i>not</i> a very accurate way of
+      * estimating a row size as the estimated values will be fixed but real
+      *  data varies wildly.
+      * You should favour sampling the DataFrame row size with
+      * [[sampleRowSize()]] to get a more accurate view
+      * (including a basic estimate).
+      * @param hints The hints to use if any as a tuple of column name to hint.
+      *
+      *              If multiple hints are given for a single column the one that
+      *              returns the maximum is used
       * @return The row size estimate in bytes, 0 if the DataFrame was empty
       */
-    def estimatedRowSize: Long = {
+    def estimatedRowSize(hints: (String, SizeHint)*): Long = {
       if (dataFrame.isEmpty) return 0L
       val schema = dataFrame.schema
-      schema.map(_.dataType.defaultSize).sum
+      schema.map { field =>
+        val defaultSize = field.dataType.defaultSize
+        val fieldHints  = hints.filter(_._1 == field.name).map(_._2)
+        if (fieldHints.nonEmpty) {
+          val calculations = fieldHints.flatMap(_.calculate(field))
+          if (calculations.nonEmpty) {
+            calculations.max.ceil.toLong
+          } else {
+            defaultSize
+          }
+        } else {
+          defaultSize
+        }
+      }.sum
     }
 
     /**
