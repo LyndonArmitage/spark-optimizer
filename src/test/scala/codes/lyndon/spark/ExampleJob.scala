@@ -1,9 +1,9 @@
 package codes.lyndon.spark
 
-import org.apache.spark.sql.{SparkSession, _}
 import org.apache.spark.sql.catalyst.catalog.CatalogColumnStat
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.{SparkSession, _}
 import org.slf4j.LoggerFactory
 
 import scala.util.Try
@@ -75,6 +75,10 @@ object ExampleJob {
       countListener.currentMetrics.foreach(s => logger.info(s"\t$s"))
 
       spark.sparkContext.removeSparkListener(countListener)
+
+      ExternalCatalogHelper
+        .currentStats(db, table)
+        .foreach(stats => logger.info(s"Stats before analyze:\n$stats"))
 
     }
 
