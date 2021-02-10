@@ -1,5 +1,6 @@
 package codes.lyndon.spark
 
+import org.apache.spark.annotation.Experimental
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -8,8 +9,10 @@ import org.apache.spark.util.SizeEstimator
 import scala.util.Try
 
 /**
+  * :: Experimental ::
   * Code for estimating and profiling DataFrame sizes for tuning jobs.
   */
+@Experimental
 object DataFrameEstimator {
 
   /**
