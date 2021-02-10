@@ -37,7 +37,10 @@ final case class RecordCountListener() extends SparkListener {
       records: Long,
       bytes: Long,
       executorRunTime: Long
-  )
+  ) {
+    override def toString: String =
+      s"MetricEntry($records rows, $bytes bytes, $executorRunTime runtime)"
+  }
 
   /**
     * @return The total number of records written at this time

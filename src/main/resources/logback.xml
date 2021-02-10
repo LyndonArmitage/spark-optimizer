@@ -12,7 +12,7 @@
     <logger name="org.apache.spark.ui" level="info"/>
     <logger name="org.spark_project" level="error"/>
     <logger name="org.sparkproject" level="error"/>
-    <logger name="codes.lyndon" level="debug"/>
+    <logger name="codes.lyndon" level="info"/>
 
     <root level="info">
         <appender-ref ref="CONSOLE"/>

@@ -2,22 +2,33 @@ package codes.lyndon.spark
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.{CatalogColumnStat, CatalogStatistics}
+import org.apache.spark.sql.catalyst.catalog.{
+  CatalogColumnStat,
+  CatalogStatistics
+}
 import org.apache.spark.sql.execution.command.CommandUtils
 import org.slf4j.LoggerFactory
 
 import scala.util.Try
 
 /**
- * Helper for manipulating Spark's external catalog.
- *
+  * Helper for manipulating Spark's external catalog.
+  *
  * Primarily useful for providing statistics for an table you have just written
- * and know some information about without having to run a full analysis.
- */
+  * and know some information about without having to run a full analysis.
+  */
 object ExternalCatalogHelper {
 
   @transient
   private[this] val logger = LoggerFactory.getLogger(getClass)
+
+  def currentStats(database: String, table: String)(implicit
+      spark: SparkSession
+  ): Option[CatalogStatistics] = {
+    val catalog   = spark.sharedState.externalCatalog
+    val tableData = catalog.getTable(database, table)
+    tableData.stats
+  }
 
   def updateStats(
       database: String,
@@ -72,8 +83,7 @@ object ExternalCatalogHelper {
         colStats = actualColStats
       )
 
-      logger.debug(s"Resolved stats for $database.$table: $newStats")
-
+      logger.trace(s"Resolved stats for $database.$table: $newStats")
       // Finally alter the actual stats, this could fail hence the Try
       catalog.alterTableStats(database, table, Some(newStats))
     }
@@ -84,6 +94,7 @@ object ExternalCatalogHelper {
   ): Map[String, CatalogColumnStat] = {
     if (previous.isEmpty) return updated
     if (updated.isEmpty) return previous
+    logger.trace(s"Merging column stats: $previous and $updated")
 
     val merged = previous.toSeq ++ updated.toSeq
     merged
