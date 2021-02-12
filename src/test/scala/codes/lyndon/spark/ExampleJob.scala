@@ -25,6 +25,8 @@ object ExampleJob {
     run().failed.foreach { cause =>
       logger.error("Job failed", cause)
     }
+
+    scala.io.StdIn.readLine()
   }
 
   def run(count: Long = 100000L)(implicit spark: SparkSession): Try[Unit] =
@@ -54,10 +56,9 @@ object ExampleJob {
         .partitionBy("remainder")
         .saveAsTable(s"$db.$table")
 
-      val updated = ExternalCatalogHelper.updateStats(
-        db,
-        table,
+      val stats = ExternalCatalogHelper.PreCollectedStats(
         Some(countListener.totalRecordsWritten),
+        Some(countListener.totalBytesWritten),
         Map(
           "id" -> CatalogColumnStat(
             distinctCount = Some(countListener.totalRecordsWritten),
@@ -66,6 +67,12 @@ object ExampleJob {
             nullCount = Some(0)
           )
         )
+      )
+
+      val updated = ExternalCatalogHelper.updateStats(
+        db,
+        table,
+        stats
       )
       updated.failed.foreach { cause =>
         logger.warn("Count not update the external catalog", cause)
