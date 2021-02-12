@@ -51,7 +51,7 @@ object DataFrameEstimator {
       override def calculate(field: StructField): Option[Long] = {
         field.dataType match {
           case _: StringType =>
-            Some(math.max(StringType.defaultSize, 2 * estimatedEntries))
+            Some(estimateString(estimatedEntries))
           case arr: ArrayType =>
             Some(arr.elementType.defaultSize * estimatedEntries)
           case map: MapType =>
@@ -62,6 +62,22 @@ object DataFrameEstimator {
           case _ => None
         }
       }
+
+      private[this] def estimateString(len: Int): Long = {
+        val baseSize = 40
+        val estimate = baseSize + roundUp(len, 8)
+        math.max(
+          estimate,
+          baseSize
+        )
+      }
+
+      private[this] def roundUp(n: Long, multiple: Long): Long =
+        if (n >= 0)
+          ((n + multiple - 1) / multiple) * multiple
+        else
+          (n / multiple) * multiple
+
     }
 
   }
@@ -223,8 +239,11 @@ object DataFrameEstimator {
       */
     def estimateSize(hints: (String, SizeHint)*): Long =
       structType.map { field =>
-        val defaultSize = field.dataType.defaultSize
-        val fieldHints  = hints.filter(_._1 == field.name).map(_._2)
+        val defaultSize = field.dataType match {
+          case _: StringType => 56 // assume non-empty with around 16 chars
+          case dataType      => dataType.defaultSize
+        }
+        val fieldHints = hints.filter(_._1 == field.name).map(_._2)
         if (fieldHints.nonEmpty) {
           val calculations = fieldHints.flatMap(_.calculate(field))
           if (calculations.nonEmpty) {
