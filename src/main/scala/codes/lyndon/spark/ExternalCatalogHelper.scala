@@ -30,14 +30,28 @@ object ExternalCatalogHelper {
     tableData.stats
   }
 
+  /**
+    * Case class containing various pre-collected statistics for an external
+    * catalog
+    *
+    * @param rowCount The total count of rows
+    * @param bytesWritten The total bytes written
+    * @param columnStats Any additional column stats
+    */
+  case class PreCollectedStats(
+      rowCount: Option[BigInt] = None,
+      bytesWritten: Option[BigInt] = None,
+      columnStats: Map[String, CatalogColumnStat] = Map.empty
+  )
+
   def updateStats(
       database: String,
       table: String,
-      rowCount: Option[BigInt] = None,
-      columnStats: Map[String, CatalogColumnStat] = Map.empty
+      stats: PreCollectedStats = PreCollectedStats()
   )(implicit spark: SparkSession): Try[Unit] =
     Try {
-      val catalog = spark.sharedState.externalCatalog
+      val PreCollectedStats(rowCount, bytesWritten, columnStats) = stats
+      val catalog                                                = spark.sharedState.externalCatalog
       if (catalog.getDatabase(database).locationUri == null) {
         // Warn about badly setup database and exit early
         throw new IllegalArgumentException(
@@ -52,7 +66,9 @@ object ExternalCatalogHelper {
       val tableMeta        = sessionState.catalog.getTableMetadata(tableIdentWithDB)
       val previousStats    = tableData.stats
 
-      val sizeInBytes = CommandUtils.calculateTotalSize(spark, tableMeta)
+      val sizeInBytes = bytesWritten.getOrElse(
+        CommandUtils.calculateTotalSize(spark, tableMeta)
+      )
       logger.debug(s"$database.$table is $sizeInBytes bytes large")
 
       val oldSizeMatches =
