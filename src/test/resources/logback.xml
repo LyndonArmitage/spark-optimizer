@@ -9,6 +9,7 @@
     </appender>
 
     <logger name="org.apache" level="warn"/>
+    <logger name="org.apache.spark" level="info"/>
     <logger name="org.apache.spark.ui" level="info"/>
     <logger name="org.spark_project" level="error"/>
     <logger name="org.sparkproject" level="error"/>
