@@ -18,7 +18,7 @@ class ExtraColumnFunctionsTest extends SparkSessionFunSpec {
 
     assert(number < max, "Should be less than max")
     assert(number >= min, "Should be at least the min")
-    assert(number == 8774L, "Should match expected")
+    assert(number == 8773L, "Should match expected")
   }
 
   test("randLong does not return out of range") { spark =>
