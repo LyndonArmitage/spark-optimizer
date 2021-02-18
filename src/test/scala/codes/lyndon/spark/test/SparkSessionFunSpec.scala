@@ -1,6 +1,5 @@
-package codes.lyndon.spark
+package codes.lyndon.spark.test
 
-import codes.lyndon.spark.test.{TempDirHelper, TestSparkSessionProvider}
 import org.apache.spark.sql.SparkSession
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite

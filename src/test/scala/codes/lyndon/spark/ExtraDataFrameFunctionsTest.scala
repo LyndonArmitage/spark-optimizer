@@ -1,6 +1,7 @@
 package codes.lyndon.spark
 
 import codes.lyndon.spark.ExtraDataFrameFunctions._
+import codes.lyndon.spark.test.SparkSessionFunSpec
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, last, when}

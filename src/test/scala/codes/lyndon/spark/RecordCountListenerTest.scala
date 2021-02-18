@@ -1,5 +1,6 @@
 package codes.lyndon.spark
 
+import codes.lyndon.spark.test.SparkSessionFunSpec
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.execution.command.CommandUtils

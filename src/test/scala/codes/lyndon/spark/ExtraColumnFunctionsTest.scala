@@ -1,6 +1,7 @@
 package codes.lyndon.spark
 
 import codes.lyndon.spark.ExtraColumnFunctions._
+import codes.lyndon.spark.test.SparkSessionFunSpec
 
 class ExtraColumnFunctionsTest extends SparkSessionFunSpec {
 

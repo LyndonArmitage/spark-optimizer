@@ -1,6 +1,6 @@
 package org.apache.spark.sql
 
-import codes.lyndon.spark.SparkSessionFunSpec
+import codes.lyndon.spark.test.SparkSessionFunSpec
 import org.apache.spark.sql.LyndonFunctions.dates_between
 
 import java.sql.Date

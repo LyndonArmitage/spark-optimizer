@@ -1,6 +1,7 @@
 package codes.lyndon.spark
 
 import codes.lyndon.spark.DataFrameEstimator._
+import codes.lyndon.spark.test.SparkSessionFunSpec
 import org.apache.spark.sql.functions.lit
 
 class DataFrameEstimatorTest extends SparkSessionFunSpec {
