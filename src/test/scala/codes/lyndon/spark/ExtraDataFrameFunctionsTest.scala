@@ -1,19 +1,18 @@
 package codes.lyndon.spark
 
 import codes.lyndon.spark.ExtraDataFrameFunctions._
-import codes.lyndon.spark.test.SparkSessionFunSpec
+import codes.lyndon.spark.test.{SharedSparkSessionFunSuite, SparkSessionFunSpec}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, last, when}
 
 import java.sql.Date
 
-class ExtraDataFrameFunctionsTest extends SparkSessionFunSpec {
+class ExtraDataFrameFunctionsTest extends SharedSparkSessionFunSuite {
 
-  test("densifies as expected on simple data") { spark =>
-    implicit val sparkSession: SparkSession = spark
-
-    import spark.implicits._
+  test("densifies as expected on simple data") {
+    val sparkSession: SparkSession = spark
+    import sparkSession.implicits._
 
     val df = Seq(
       (Date.valueOf("2020-01-15"), 0),
@@ -29,10 +28,9 @@ class ExtraDataFrameFunctionsTest extends SparkSessionFunSpec {
     assert(count == 18, "Wrong count of entries")
   }
 
-  test("densify includes null entries") { spark =>
-    implicit val sparkSession: SparkSession = spark
-
-    import spark.implicits._
+  test("densify includes null entries") {
+    val sparkSession: SparkSession = spark
+    import sparkSession.implicits._
 
     val df = Seq(
       (Date.valueOf("2020-01-15"), 0),
@@ -52,10 +50,9 @@ class ExtraDataFrameFunctionsTest extends SparkSessionFunSpec {
     dense.unpersist()
   }
 
-  test("densify and window") { spark =>
-    implicit val sparkSession: SparkSession = spark
-
-    import spark.implicits._
+  test("densify and window") {
+    val sparkSession: SparkSession = spark
+    import sparkSession.implicits._
 
     val df = Seq(
       (Date.valueOf("2020-01-15"), 0),

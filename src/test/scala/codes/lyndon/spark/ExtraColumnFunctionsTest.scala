@@ -1,13 +1,13 @@
 package codes.lyndon.spark
 
 import codes.lyndon.spark.ExtraColumnFunctions._
-import codes.lyndon.spark.test.SparkSessionFunSpec
+import codes.lyndon.spark.test.SharedSparkSessionFunSuite
 
-class ExtraColumnFunctionsTest extends SparkSessionFunSpec {
+class ExtraColumnFunctionsTest extends SharedSparkSessionFunSuite {
 
-  test("randLong returns expected number") { spark =>
-    val min = 100L
-    val max = 9200L
+  test("randLong returns expected number") {
+    val min  = 100L
+    val max  = 9200L
     val seed = 1L
 
     val number = spark
@@ -22,7 +22,7 @@ class ExtraColumnFunctionsTest extends SparkSessionFunSpec {
     assert(number == 8773L, "Should match expected")
   }
 
-  test("randLong does not return out of range") { spark =>
+  test("randLong does not return out of range") {
     val min = 50L
     val max = 2000L
 
@@ -32,7 +32,7 @@ class ExtraColumnFunctionsTest extends SparkSessionFunSpec {
       .withColumn("rand", randLong(min, max))
       .drop("id")
       .collect()
-      .map {row => row.getLong(0)}
+      .map { row => row.getLong(0) }
       .toSeq
 
     numbers.foreach { number =>

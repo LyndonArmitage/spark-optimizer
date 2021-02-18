@@ -7,7 +7,9 @@ import org.slf4j.{Logger, LoggerFactory}
 
 abstract class SharedSparkSessionFunSuite
     extends AnyFunSuite
-    with BeforeAndAfterAll with TempDirHelper with TestSparkSessionProvider {
+    with BeforeAndAfterAll
+    with TempDirHelper
+    with TestSparkSessionProvider {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   protected implicit var spark: SparkSession = _

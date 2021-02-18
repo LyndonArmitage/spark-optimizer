@@ -1,12 +1,12 @@
 package codes.lyndon.spark
 
 import codes.lyndon.spark.DataFrameEstimator._
-import codes.lyndon.spark.test.SparkSessionFunSpec
+import codes.lyndon.spark.test.SharedSparkSessionFunSuite
 import org.apache.spark.sql.functions.lit
 
-class DataFrameEstimatorTest extends SparkSessionFunSpec {
+class DataFrameEstimatorTest extends SharedSparkSessionFunSuite {
 
-  test("estimation returns expected size") { spark =>
+  test("estimation returns expected size") {
     val estimate = spark
       .range(1)
       .withColumn("foo", lit(1))
@@ -18,7 +18,7 @@ class DataFrameEstimatorTest extends SparkSessionFunSpec {
     assert(estimate == 77, "Estimation differs")
   }
 
-  test("Estimation and actual size match") { spark =>
+  test("Estimation and actual size match") {
     val df = spark
       .range(1)
       .withColumn("foo", lit(1))
@@ -38,7 +38,7 @@ class DataFrameEstimatorTest extends SparkSessionFunSpec {
     df.unpersist()
   }
 
-  test("Estimate and sample within range of each other") { spark =>
+  test("Estimate and sample within range of each other") {
     val df = spark
       .range(1)
       .withColumn("foo", lit(1))
@@ -62,7 +62,7 @@ class DataFrameEstimatorTest extends SparkSessionFunSpec {
     df.unpersist()
   }
 
-  test("Estimate with hint and sample match") { spark =>
+  test("Estimate with hint and sample match") {
     val df = spark
       .range(1)
       .withColumn("str", lit("str"))
