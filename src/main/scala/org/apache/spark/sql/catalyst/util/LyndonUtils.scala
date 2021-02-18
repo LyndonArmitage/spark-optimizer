@@ -1,5 +1,7 @@
 package org.apache.spark.sql.catalyst.util
 
+import org.apache.spark.sql.catalyst.util.ArrayData.toArrayData
+
 import java.time.{Duration, LocalDate}
 
 object LyndonUtils {
@@ -11,7 +13,6 @@ object LyndonUtils {
 
   private[this] def localDateToDays(localDate: LocalDate): SQLDate =
     Math.toIntExact(localDate.toEpochDay)
-
 
   def getDatesBetween(start: SQLDate, end: SQLDate): ArrayData = {
     val startDate = localDate(start)
@@ -28,6 +29,6 @@ object LyndonUtils {
       val date = startDate.plusDays(day)
       newRows += localDateToDays(date)
     }
-    new GenericArrayData(newRows.result())
+    toArrayData(newRows.result())
   }
 }

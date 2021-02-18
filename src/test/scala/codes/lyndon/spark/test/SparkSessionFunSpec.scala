@@ -1,5 +1,6 @@
 package codes.lyndon.spark.test
 
+import com.github.mrpowers.spark.fast.tests.DataFrameComparer
 import org.apache.spark.sql.SparkSession
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuite
@@ -8,7 +9,8 @@ import org.slf4j.{Logger, LoggerFactory}
 abstract class SparkSessionFunSpec
     extends FixtureAnyFunSuite
     with TempDirHelper
-    with TestSparkSessionProvider {
+    with TestSparkSessionProvider
+    with DataFrameComparer {
 
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
