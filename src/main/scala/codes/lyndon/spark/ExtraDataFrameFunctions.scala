@@ -1,7 +1,14 @@
 package codes.lyndon.spark
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{Column, DataFrame}
 import org.apache.spark.sql.LyndonFunctions.dates_between
+import org.apache.spark.sql.catalyst.expressions.{
+  Ascending,
+  NullOrdering,
+  NullsFirst,
+  SortDirection,
+  SortOrder
+}
 import org.apache.spark.sql.functions._
 
 object ExtraDataFrameFunctions {
@@ -10,8 +17,8 @@ object ExtraDataFrameFunctions {
 
     def densify_on_date(
         dateColumn: String,
-        ascending: Boolean = true,
-        nullsFirst: Boolean = true
+        order: SortDirection = Ascending,
+        nullOrdering: NullOrdering = NullsFirst
     ): DataFrame = {
       import df.sparkSession.implicits._
       val dates = df
@@ -25,12 +32,14 @@ object ExtraDataFrameFunctions {
         .withColumn(dateColumn, explode($"range"))
         .drop("range")
 
-      val sortCol = (ascending, nullsFirst) match {
-        case (true, true)   => col(dateColumn).asc_nulls_first
-        case (true, false)  => col(dateColumn).asc_nulls_last
-        case (false, true)  => col(dateColumn).desc_nulls_first
-        case (false, false) => col(dateColumn).desc_nulls_last
-      }
+      val sortCol = new Column(
+        new SortOrder(
+          col(dateColumn).expr,
+          order,
+          nullOrdering,
+          Set.empty
+        )
+      )
       // Must be outer to include any rows with null values in their date column
       df.join(dates, Seq(dateColumn), "outer")
         .sort(sortCol)
