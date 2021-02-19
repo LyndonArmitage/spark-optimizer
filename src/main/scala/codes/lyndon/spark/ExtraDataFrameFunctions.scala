@@ -18,7 +18,8 @@ object ExtraDataFrameFunctions {
     def densify_on_date(
         dateColumn: String,
         order: SortDirection = Ascending,
-        nullOrdering: NullOrdering = NullsFirst
+        nullOrdering: NullOrdering = NullsFirst,
+        dropNullDates: Boolean = false
     ): DataFrame = {
       import df.sparkSession.implicits._
       val dates = df
@@ -40,9 +41,15 @@ object ExtraDataFrameFunctions {
           Set.empty
         )
       )
-      // Must be outer to include any rows with null values in their date column
-      df.join(dates, Seq(dateColumn), "outer")
-        .sort(sortCol)
+      if (!dropNullDates) {
+        // Must be outer to include any rows with null values in their date
+        // column
+        df.join(dates, Seq(dateColumn), "outer")
+      } else {
+        // If we are dropping nulls we can use the dates df on the left of the
+        // join
+        dates.join(df, Seq(dateColumn), "left")
+      }.sort(sortCol)
     }
   }
 

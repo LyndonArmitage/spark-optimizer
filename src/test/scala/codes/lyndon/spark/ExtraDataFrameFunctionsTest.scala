@@ -50,6 +50,29 @@ class ExtraDataFrameFunctionsTest extends SharedSparkSessionFunSuite {
     dense.unpersist()
   }
 
+  test("densify can exclude null entries") {
+    val sparkSession: SparkSession = spark
+    import sparkSession.implicits._
+
+    val df = Seq(
+      (Date.valueOf("2020-01-15"), 0),
+      (null, 4),
+      (Date.valueOf("2020-02-01"), 5),
+      (null, 3)
+    ).toDF("date", "val")
+
+    val dense = df.densify_on_date("date", dropNullDates = true)
+    dense.cache()
+
+    val count = dense.count()
+    assert(count == 18, "Wrong count of entries")
+    val nullCount = dense.filter($"date".isNull).count()
+    assert(nullCount == 0, "Wrong count of nulls")
+    dense.show()
+    dense.unpersist()
+  }
+
+
   test("densify and window") {
     val sparkSession: SparkSession = spark
     import sparkSession.implicits._
