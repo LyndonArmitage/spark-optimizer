@@ -23,12 +23,10 @@ object LyndonUtils {
       )
       .toDays
 
-    val newRows = Seq.newBuilder[SQLDate]
-    // get all intermediate dates
-    for (day <- 0L to daysBetween) {
-      val date = startDate.plusDays(day)
-      newRows += localDateToDays(date)
-    }
-    toArrayData(newRows.result())
+    val arr = (0L to daysBetween).map { day =>
+      localDateToDays(startDate.plusDays(day))
+    }.toArray
+
+    toArrayData(arr)
   }
 }
