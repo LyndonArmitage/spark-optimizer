@@ -91,7 +91,7 @@ final case class RecordCountListener() extends SparkListener {
     tasksProcessed.set(0)
   }
 
-  override def onTaskEnd(taskEnd: SparkListenerTaskEnd) {
+  override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = {
     if (
       taskEnd != null &&
       taskEnd.taskMetrics != null &&
