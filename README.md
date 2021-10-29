@@ -52,6 +52,43 @@ This actually makes use of a custom Catalyst function defined in
 `LyndonFunctions` briefly described in this
 [blog post](https://lyndon.codes/2021/02/18/spark-native-functions/).
 
+This can be useful if you want to stretch a value over a period of time:
+
+```scala
+val df = Seq(
+  (Date.valueOf("2020-01-15"), 0),
+  (Date.valueOf("2020-01-16"), 1),
+  (Date.valueOf("2020-01-17"), 2),
+  (Date.valueOf("2020-01-18"), 0),
+  (Date.valueOf("2020-01-20"), 1),
+  (null, 4), // by default nulls are placed first in the new DataFrame
+  (Date.valueOf("2020-02-01"), 5),
+  (null, 3)
+).toDF("date", "val")
+
+val dense = df.densify_on_date("date")
+
+val window = Window
+  // Note this windows over all the data as a single partition
+  .orderBy("date")
+  .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+
+val windowed = dense.withColumn(
+  "val",
+  when(
+    col("val").isNull,
+    last("val", ignoreNulls = true).over(window)
+  )
+    .otherwise(col("val"))
+)
+```
+
+You could also simply fill in the blank values with a fixed value:
+
+```scala
+dense.na.fill(0, Seq("val"))
+```
+
 ## PartitionCalculator
 
 `PartitionCalculator` is a class dedicated to trying to calculate the correct
