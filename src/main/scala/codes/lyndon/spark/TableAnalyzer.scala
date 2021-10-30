@@ -103,7 +103,7 @@ object TableAnalyzer {
     Try {
       val cmd = AnalyzeTableCommand(
         identifier,
-        noscan = noscan
+        noScan = noscan
       )
       cmd.run(spark)
     }

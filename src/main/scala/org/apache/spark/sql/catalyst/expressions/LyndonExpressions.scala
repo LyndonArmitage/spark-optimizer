@@ -1,15 +1,7 @@
 package org.apache.spark.sql.catalyst.expressions
-import org.apache.spark.sql.catalyst.expressions.codegen.{
-  CodegenContext,
-  ExprCode
-}
-import org.apache.spark.sql.catalyst.util.{GenericArrayData, LyndonUtils}
-import org.apache.spark.sql.types.{
-  AbstractDataType,
-  ArrayType,
-  DataType,
-  DateType
-}
+import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
+import org.apache.spark.sql.catalyst.util.LyndonUtils
+import org.apache.spark.sql.types.{AbstractDataType, ArrayType, DataType, DateType}
 
 //noinspection ScalaFileName
 case class DatesBetween(
@@ -40,4 +32,11 @@ case class DatesBetween(
       (a, b) => s"$dtu.getDatesBetween($a,$b)"
     )
   }
+
+  override protected def withNewChildrenInternal(
+      newLeft: Expression,
+      newRight: Expression
+  ): DatesBetween =
+    copy(startDate = newLeft, endDate = newRight)
+
 }

@@ -38,7 +38,7 @@ object ExtraDataFrameFunctions {
           col(dateColumn).expr,
           order,
           nullOrdering,
-          Set.empty
+          Seq.empty
         )
       )
       if (!dropNullDates) {
