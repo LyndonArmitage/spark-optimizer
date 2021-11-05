@@ -40,7 +40,8 @@ class OpenLineageService(
   override def startJob(
       config: JobConfig,
       runId: UUID,
-      eventTime: ZonedDateTime = ZonedDateTime.now()
+      eventTime: ZonedDateTime = ZonedDateTime.now(),
+      lineageStats: Map[Table, LineageStatistics] = Map.empty
   ): Try[Unit] = {
     sendEvent(newEvent(config, runId, StartEvent, eventTime))
   }
@@ -48,9 +49,10 @@ class OpenLineageService(
   override def completeJob(
       config: JobConfig,
       runId: UUID,
-      eventTime: ZonedDateTime = ZonedDateTime.now()
+      eventTime: ZonedDateTime = ZonedDateTime.now(),
+      lineageStats: Map[Table, LineageStatistics] = Map.empty
   ): Try[Unit] = {
-    sendEvent(newEvent(config, runId, CompleteEvent, eventTime))
+    sendEvent(newEvent(config, runId, CompleteEvent, eventTime, lineageStats))
   }
 
   override def abortJob(
@@ -73,13 +75,14 @@ class OpenLineageService(
       config: JobConfig,
       runId: UUID,
       eventType: EventType,
-      eventTime: ZonedDateTime = ZonedDateTime.now()
+      eventTime: ZonedDateTime = ZonedDateTime.now(),
+      lineageStats: Map[Table, LineageStatistics] = Map.empty
   ): OpenLineage.RunEvent = {
 
     val job     = buildJob(config)
     val run     = buildRun(config, runId)
-    val inputs  = buildInputs(config)
-    val outputs = buildOutputs(config)
+    val inputs  = buildInputs(config, lineageStats)
+    val outputs = buildOutputs(config, lineageStats)
 
     openLineage.newRunEvent(
       eventType.asString,
@@ -111,41 +114,82 @@ class OpenLineageService(
       .build()
   }
 
-  private def buildInputs(config: JobConfig): Seq[OpenLineage.InputDataset] =
-    config.inputs.map(buildInput)
+  private def buildInputs(
+      config: JobConfig,
+      lineageStats: Map[Table, LineageStatistics] = Map.empty
+  ): Seq[OpenLineage.InputDataset] =
+    config.inputs.map { table => buildInput(table, lineageStats.get(table)) }
 
-  private def buildInput(table: ReadTable): OpenLineage.InputDataset = {
+  private def buildInput(
+      table: ReadTable,
+      stats: Option[LineageStatistics] = None
+  ): OpenLineage.InputDataset = {
     val facets = openLineage
       .newDatasetFacetsBuilder()
       .dataSource(dataSourceFor(table))
       // TODO: Schema
       // TODO: Documentation
       .build()
-    openLineage
+    val builder = openLineage
       .newInputDatasetBuilder()
       .namespace(namespace)
       .name(table.name)
       .facets(facets)
-      .build()
+    stats.foreach { stats =>
+      builder.inputFacets(
+        openLineage
+          .newInputDatasetInputFacetsBuilder()
+          .dataQualityMetrics(
+            openLineage
+              .newDataQualityMetricsInputDatasetFacetBuilder()
+              .rowCount(stats.rowCount)
+              .bytes(stats.byteSize)
+              .build()
+          )
+          .build()
+      )
+    }
+
+    builder.build()
   }
 
-  private def buildOutputs(config: JobConfig): Seq[OpenLineage.OutputDataset] =
-    config.outputs.map(buildOutput)
+  private def buildOutputs(
+      config: JobConfig,
+      lineageStats: Map[Table, LineageStatistics] = Map.empty
+  ): Seq[OpenLineage.OutputDataset] =
+    config.outputs.map { table =>
+      buildOutput(table, lineageStats.get(table))
+    }
 
-  private def buildOutput(table: WriteTable): OpenLineage.OutputDataset = {
+  private def buildOutput(
+      table: WriteTable,
+      stats: Option[LineageStatistics] = None
+  ): OpenLineage.OutputDataset = {
     val facets = openLineage
       .newDatasetFacetsBuilder()
       .dataSource(dataSourceFor(table))
       // TODO: Schema
       // TODO: Documentation
       .build()
-    openLineage
+
+    val builder = openLineage
       .newOutputDatasetBuilder()
       .namespace(namespace)
       .name(table.name)
       .facets(facets)
-      // TODO: Output stats
-      .build()
+
+    stats.foreach { stats =>
+      builder.outputFacets(
+        openLineage.newOutputDatasetOutputFacets(
+          openLineage
+            .newOutputStatisticsOutputDatasetFacetBuilder()
+            .rowCount(stats.rowCount)
+            .size(stats.byteSize)
+            .build()
+        )
+      )
+    }
+    builder.build()
   }
 
   private def dataSourceFor(
@@ -153,9 +197,9 @@ class OpenLineageService(
   ): OpenLineage.DatasourceDatasetFacet = {
 
     val dataSourceType = table.source.`type` match {
-      case S3FileSystem => "S3_FILE"
+      case S3FileSystem    => "S3_FILE"
       case LocalFileSystem => "LOCAL_FILE"
-      case JDBC => "DB_TABLE"
+      case JDBC            => "DB_TABLE"
     }
 
     openLineage

@@ -9,13 +9,15 @@ trait LineageService {
   def startJob(
       config: JobConfig,
       runId: UUID,
-      eventTime: ZonedDateTime = ZonedDateTime.now()
+      eventTime: ZonedDateTime = ZonedDateTime.now(),
+      lineageStats: Map[Table, LineageStatistics] = Map.empty
   ): Try[Unit]
 
   def completeJob(
       config: JobConfig,
       runId: UUID,
-      eventTime: ZonedDateTime = ZonedDateTime.now()
+      eventTime: ZonedDateTime = ZonedDateTime.now(),
+      lineageStats: Map[Table, LineageStatistics] = Map.empty
   ): Try[Unit]
 
   def abortJob(
