@@ -22,6 +22,8 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.6"
 )
 
+libraryDependencies += "com.fasterxml.jackson.module" % "jackson-modules-java8" % "2.12.5" % "runtime" pomOnly()
+
 //val circeVersion = "0.14.1"
 //libraryDependencies ++= Seq(
 //  "io.circe" %% "circe-core",

@@ -1,6 +1,7 @@
 package codes.lyndon.spark.job
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import io.openlineage.client.OpenLineage
 import org.slf4j.LoggerFactory
 import sttp.model.{MediaType, Uri}
@@ -15,7 +16,7 @@ class OpenLineageService(
     val namespace: String,
     val apiURI: URI,
     val producer: Option[URI] = None
-) extends LineageService{
+) extends LineageService {
   private[this] val logger = LoggerFactory.getLogger(getClass)
 
   private sealed abstract class EventType(val asString: String)
@@ -34,6 +35,7 @@ class OpenLineageService(
     producer.getOrElse(URI.create(InetAddress.getLocalHost.toString))
   )
   private val objectMapper = new ObjectMapper()
+  objectMapper.registerModule(new JavaTimeModule())
 
   override def startJob(
       config: JobConfig,
@@ -149,25 +151,49 @@ class OpenLineageService(
   private def dataSourceFor(
       table: Table
   ): OpenLineage.DatasourceDatasetFacet = {
+
+    val dataSourceType = table.source.`type` match {
+      case S3FileSystem => "S3_FILE"
+      case LocalFileSystem => "LOCAL_FILE"
+      case JDBC => "DB_TABLE"
+    }
+
     openLineage
       .newDatasourceDatasetFacetBuilder()
       .name(table.name)
       .uri(table.source.locationURI)
+      .put("type", dataSourceType)
       .build()
   }
 
   private def sendEvent(runEvent: OpenLineage.RunEvent): Try[Unit] =
     Try {
 
+      logger.info(s"Sending Event: $runEvent")
       val runEventJson = objectMapper.writeValueAsString(runEvent)
-      logger.info(s"Sending Event: $runEventJson")
 
       import sttp.client3._
       val backend = HttpURLConnectionBackend()
-      val request = basicRequest.post(Uri(apiURI))
+      val request = basicRequest
+        .post(Uri(apiURI))
         .body(runEventJson)
         .contentType(MediaType.ApplicationJson)
 
-      backend.send(request)
+      val response = backend.send(request)
+      logger.debug(s"Response: ${response.show()}")
+
+      if (!response.isSuccess) {
+        val message = if (response.isServerError) {
+          s"Server error: ${response.show()}"
+        } else {
+          s"Client error: ${response.show()}"
+        }
+        throw OpenLineageException(message)
+      }
     }
+
+  case class OpenLineageException(
+      message: String,
+      cause: Throwable = null
+  ) extends Exception(message, cause)
 }
