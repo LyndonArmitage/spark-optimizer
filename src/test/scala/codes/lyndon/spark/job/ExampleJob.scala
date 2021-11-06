@@ -1,18 +1,49 @@
-package codes.lyndon.spark
+package codes.lyndon.spark.job
 
+import codes.lyndon.spark.{ExternalCatalogHelper, RecordCountListener}
 import org.apache.spark.sql.catalyst.catalog.CatalogColumnStat
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.{SparkSession, _}
+import org.apache.spark.sql._
 import org.slf4j.LoggerFactory
 
+import java.util.UUID
 import scala.util.Try
+
+case class ExampleJobConfig(
+    override val jobName: String,
+    override val inputs: Seq[ReadTable],
+    override val outputs: Seq[WriteTable]
+) extends JobConfig
+
+case class ExampleReadTable(
+    override val name: String,
+    override val source: DataSource
+) extends ReadTable
+
+case class ExampleWriteTable(
+    override val name: String,
+    override val source: DataSource
+) extends WriteTable
 
 object ExampleJob {
 
   private[this] val logger = LoggerFactory.getLogger(getClass)
 
   def main(args: Array[String]): Unit = {
+
+    implicit val jobConfig: ExampleJobConfig = ExampleJobConfig(
+      "Example Job",
+      Seq(),
+      Seq(
+        ExampleWriteTable("example", DataSource("tmp", LocalFileSystem, "/tmp"))
+      )
+    )
+
+    implicit val lineageService: LineageService = new OpenLineageService(
+      "example"
+    )
+
     val procs = Runtime.getRuntime.availableProcessors()
 
     implicit val spark: SparkSession = SparkSession
@@ -22,14 +53,39 @@ object ExampleJob {
       //.enableHiveSupport()
       .getOrCreate()
 
-    run().failed.foreach { cause =>
+    val runId = UUID.randomUUID()
+    lineageService.startJob(jobConfig, runId)
+
+    val ran = run(100000L, runId)
+
+    ran.foreach { results =>
+      logger.info("Job completed")
+      val JobSuccess(lineageStats, lineageSchema) = results
+
+      lineageService.completeJob(
+        jobConfig,
+        runId,
+        lineageStats = lineageStats,
+        tableSchemas = lineageSchema
+      )
+    }
+
+    ran.failed.foreach { cause =>
       logger.error("Job failed", cause)
+      lineageService.failJob(jobConfig, runId)
     }
 
     scala.io.StdIn.readLine()
   }
 
-  def run(count: Long = 100000L)(implicit spark: SparkSession): Try[Unit] =
+  def run(
+      count: Long,
+      runId: UUID
+  )(implicit
+      spark: SparkSession,
+      config: ExampleJobConfig,
+      lineage: LineageService
+  ): Try[JobSuccess] =
     Try {
       import spark.implicits._
 
@@ -47,12 +103,15 @@ object ExampleJob {
         .withColumn("is_odd", !$"is_even")
         .withColumn("remainder", $"id" % 10)
 
-      val db    = spark.catalog.currentDatabase
-      val table = "example"
+      val db          = spark.catalog.currentDatabase
+      val outputTable = config.outputs.head
+      val table       = outputTable.name
+      val outputPath  = outputTable.source.locationURI.resolve(table).toString
+      logger.info(s"Writing out $table to $outputPath")
       df.write
         .format("parquet")
         .mode(SaveMode.Overwrite)
-        .option("path", "/tmp/example.table")
+        .option("path", outputPath)
         .partitionBy("remainder")
         .saveAsTable(s"$db.$table")
 
@@ -85,8 +144,17 @@ object ExampleJob {
 
       ExternalCatalogHelper
         .currentStats(db, table)
-        .foreach(stats => logger.info(s"Stats before analyze:\n$stats"))
+        .foreach(stats => logger.info(s"Stats:\n$stats"))
 
+      val statTuple =
+        (config.outputs.head, LineageStatistics.from(stats)) match {
+          case (table, Some(stats)) => Some(table, stats)
+          case _                    => None
+        }
+
+      val schema = (config.outputs.head, LineageSchema.from(df))
+
+      JobSuccess(statTuple.toMap, Map(schema))
     }
 
 }

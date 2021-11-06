@@ -37,22 +37,23 @@ object Tester {
     runWithFailures(lineage)
     cyclicJob(lineage)
 
-
   }
 
-  def cyclicJob(lineage: LineageService) : Unit = {
+  def cyclicJob(lineage: LineageService): Unit = {
 
     val myDb =
       DataSource("my-db", JDBC, "jdbc:oracle:thin:@192.168.0.1:5454:my-db")
+
+    val originalTable = TestReadTable("incremental_table", myDb)
+    val incrementalData = TestReadTable(
+      "incremental_data",
+      DataSource("incremental", S3FileSystem, "s3://testing/foo")
+    )
+    val updatedTable = TestWriteTable("incremental_table", myDb)
     val testConfig = TestConfig(
       "cyclic-job",
-      Seq(
-        TestReadTable("incremental_table", myDb),
-        TestReadTable("incremental_data", DataSource("incremental", S3FileSystem, "s3://testing/foo"))
-      ),
-      Seq(
-        TestWriteTable("incremental_table", myDb)
-      )
+      Seq(originalTable, incrementalData),
+      Seq(updatedTable)
     )
 
     val runId = UUID.randomUUID()
@@ -63,18 +64,29 @@ object Tester {
       ZoneId.systemDefault()
     )
 
-    lineage.startJob(testConfig, runId, startTime) match {
+    lineage.startJob(
+      testConfig,
+      runId,
+      startTime,
+      Map(
+        originalTable   -> LineageStatistics(1000000L, 1024L * 10),
+        incrementalData -> LineageStatistics(1000L, 1024L)
+      )
+    ) match {
       case Failure(e) => logger.error("Failed to start job", e)
       case Success(_) => logger.info("Succeeded in sending start job")
     }
     val endTime = startTime.plusMinutes(75)
 
-    lineage.completeJob(testConfig, runId, endTime) match {
+    lineage.completeJob(testConfig, runId, endTime, Map(
+      originalTable   -> LineageStatistics(1000000L, 1024L * 10),
+      incrementalData -> LineageStatistics(1000L, 1024L),
+      updatedTable -> LineageStatistics(1001000L, (1024L * 10) + 1024L)
+    )) match {
       case Failure(e) => logger.error("Failed to complete job", e)
       case Success(_) => logger.info("Succeeded in sending complete job")
     }
   }
-
 
   def simpleRun(lineage: LineageService): Unit = {
 
@@ -116,7 +128,7 @@ object Tester {
     }
   }
 
-  def runWithFailures(lineage: LineageService) : Unit = {
+  def runWithFailures(lineage: LineageService): Unit = {
 
     val myDb =
       DataSource("my-db", JDBC, "jdbc:oracle:thin:@192.168.0.1:5454:my-db")
@@ -148,7 +160,6 @@ object Tester {
       LocalDateTime.of(2021, Month.MAY, 21, 9, 10, 10),
       ZoneId.systemDefault()
     )
-
 
     lineage.abortJob(testConfig, runId, abortTime) match {
       case Failure(e) => logger.error("Failed to abort job", e)

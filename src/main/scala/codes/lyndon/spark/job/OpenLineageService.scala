@@ -14,7 +14,7 @@ import scala.collection.JavaConverters._
 
 class OpenLineageService(
     val namespace: String,
-    val apiURI: URI,
+    val apiURI: URI = URI.create("http://localhost:5000/api/v1/lineage"),
     val producer: Option[URI] = None
 ) extends LineageService {
   private[this] val logger = LoggerFactory.getLogger(getClass)
@@ -41,18 +41,20 @@ class OpenLineageService(
       config: JobConfig,
       runId: UUID,
       eventTime: ZonedDateTime = ZonedDateTime.now(),
-      lineageStats: Map[Table, LineageStatistics] = Map.empty
+      lineageStats: Map[Table, LineageStatistics] = Map.empty,
+      tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Try[Unit] = {
-    sendEvent(newEvent(config, runId, StartEvent, eventTime))
+    sendEvent(newEvent(config, runId, StartEvent, eventTime, lineageStats, tableSchemas))
   }
 
   override def completeJob(
       config: JobConfig,
       runId: UUID,
       eventTime: ZonedDateTime = ZonedDateTime.now(),
-      lineageStats: Map[Table, LineageStatistics] = Map.empty
+      lineageStats: Map[Table, LineageStatistics] = Map.empty,
+      tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Try[Unit] = {
-    sendEvent(newEvent(config, runId, CompleteEvent, eventTime, lineageStats))
+    sendEvent(newEvent(config, runId, CompleteEvent, eventTime, lineageStats, tableSchemas))
   }
 
   override def abortJob(
@@ -76,13 +78,14 @@ class OpenLineageService(
       runId: UUID,
       eventType: EventType,
       eventTime: ZonedDateTime = ZonedDateTime.now(),
-      lineageStats: Map[Table, LineageStatistics] = Map.empty
+      lineageStats: Map[Table, LineageStatistics] = Map.empty,
+      tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): OpenLineage.RunEvent = {
 
     val job     = buildJob(config)
     val run     = buildRun(config, runId)
-    val inputs  = buildInputs(config, lineageStats)
-    val outputs = buildOutputs(config, lineageStats)
+    val inputs  = buildInputs(config, lineageStats, tableSchemas)
+    val outputs = buildOutputs(config, lineageStats, tableSchemas)
 
     openLineage.newRunEvent(
       eventType.asString,
@@ -116,20 +119,20 @@ class OpenLineageService(
 
   private def buildInputs(
       config: JobConfig,
-      lineageStats: Map[Table, LineageStatistics] = Map.empty
+      lineageStats: Map[Table, LineageStatistics] = Map.empty,
+      tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Seq[OpenLineage.InputDataset] =
-    config.inputs.map { table => buildInput(table, lineageStats.get(table)) }
+    config.inputs.map { table =>
+      buildInput(table, lineageStats.get(table), tableSchemas.get(table))
+    }
 
   private def buildInput(
       table: ReadTable,
-      stats: Option[LineageStatistics] = None
+      stats: Option[LineageStatistics] = None,
+      schema: Option[LineageSchema] = None
   ): OpenLineage.InputDataset = {
-    val facets = openLineage
-      .newDatasetFacetsBuilder()
-      .dataSource(dataSourceFor(table))
-      // TODO: Schema
-      // TODO: Documentation
-      .build()
+    val facets = buildDatasetFacets(table, schema)
+
     val builder = openLineage
       .newInputDatasetBuilder()
       .namespace(namespace)
@@ -155,22 +158,19 @@ class OpenLineageService(
 
   private def buildOutputs(
       config: JobConfig,
-      lineageStats: Map[Table, LineageStatistics] = Map.empty
+      lineageStats: Map[Table, LineageStatistics] = Map.empty,
+      tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Seq[OpenLineage.OutputDataset] =
     config.outputs.map { table =>
-      buildOutput(table, lineageStats.get(table))
+      buildOutput(table, lineageStats.get(table), tableSchemas.get(table))
     }
 
   private def buildOutput(
       table: WriteTable,
-      stats: Option[LineageStatistics] = None
+      stats: Option[LineageStatistics] = None,
+      schema: Option[LineageSchema] = None
   ): OpenLineage.OutputDataset = {
-    val facets = openLineage
-      .newDatasetFacetsBuilder()
-      .dataSource(dataSourceFor(table))
-      // TODO: Schema
-      // TODO: Documentation
-      .build()
+    val facets = buildDatasetFacets(table, schema)
 
     val builder = openLineage
       .newOutputDatasetBuilder()
@@ -210,6 +210,40 @@ class OpenLineageService(
       .build()
   }
 
+  private def buildDatasetFacets(
+      table: Table,
+      schema: Option[LineageSchema]
+  ): OpenLineage.DatasetFacets = {
+    val facetsBuilder = openLineage
+      .newDatasetFacetsBuilder()
+      .dataSource(dataSourceFor(table))
+    // TODO: Documentation
+    schema.foreach { schema => facetsBuilder.schema(buildSchema(schema)) }
+
+    facetsBuilder.build()
+  }
+
+  private def buildSchema(
+      schema: LineageSchema
+  ): OpenLineage.SchemaDatasetFacet = {
+    openLineage
+      .newSchemaDatasetFacetBuilder()
+      .fields(
+        schema.fieldsToType
+          .map {
+            case (key, dataType) =>
+              openLineage
+                .newSchemaDatasetFacetFieldsBuilder()
+                .name(key)
+                .`type`(dataType)
+                .build()
+          }
+          .toList
+          .asJava
+      )
+      .build()
+  }
+
   private def sendEvent(runEvent: OpenLineage.RunEvent): Try[Unit] =
     Try {
 
@@ -223,6 +257,7 @@ class OpenLineageService(
         .body(runEventJson)
         .contentType(MediaType.ApplicationJson)
 
+      logger.debug(s"Sending JSON: $runEventJson")
       val response = backend.send(request)
       logger.debug(s"Response: ${response.show()}")
 
