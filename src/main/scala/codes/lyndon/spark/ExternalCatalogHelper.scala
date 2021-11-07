@@ -2,11 +2,9 @@ package codes.lyndon.spark
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.{
-  CatalogColumnStat,
-  CatalogStatistics
-}
+import org.apache.spark.sql.catalyst.catalog.{CatalogColumnStat, CatalogStatistics}
 import org.apache.spark.sql.execution.command.CommandUtils
+import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import scala.util.Try
@@ -28,6 +26,14 @@ object ExternalCatalogHelper {
     val catalog   = spark.sharedState.externalCatalog
     val tableData = catalog.getTable(database, table)
     tableData.stats
+  }
+
+  def currentSchema(database: String, table: String)(implicit
+      spark: SparkSession
+  ): StructType = {
+    val catalog   = spark.sharedState.externalCatalog
+    val tableData = catalog.getTable(database, table)
+    tableData.schema
   }
 
   /**

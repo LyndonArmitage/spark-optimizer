@@ -35,8 +35,18 @@ object JobOutcome {
 
     def asTry: Try[JobSucceeded] = {
       either match {
-        case Left(failure) => Failure(failure.cause.getOrElse(new RuntimeException(failure.message)))
+        case Left(failure) =>
+          Failure(
+            failure.cause.getOrElse(new RuntimeException(failure.message))
+          )
         case Right(success) => Success(success)
+      }
+    }
+
+    def asOutcome: JobOutcome = {
+      either match {
+        case Left(value)  => value
+        case Right(value) => value
       }
     }
 
@@ -46,7 +56,8 @@ object JobOutcome {
 
     def asEither: Either[JobFailed, JobSucceeded] = {
       t match {
-        case Failure(cause) => Left(JobFailed(cause.getMessage, cause = Some(cause)))
+        case Failure(cause) =>
+          Left(JobFailed(cause.getMessage, cause = Some(cause)))
         case Success(value) => Right(value)
       }
     }

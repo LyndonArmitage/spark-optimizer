@@ -18,7 +18,15 @@ abstract class SparkJob[ConfigType <: JobConfig] {
     val job = s"${config.jobName}:$runId"
     logger.info(s"Starting job: $job")
 
-    lineage.startJob(config, runId) match {
+    val inputStats   = getInputStats()
+    val inputSchemas = getInputSchemas()
+
+    lineage.startJob(
+      config,
+      runId,
+      lineageStats = inputStats,
+      tableSchemas = inputSchemas
+    ) match {
       case Failure(cause) =>
         logger.error("Could not reach lineage service to start job.")
         // Re-throw and cause the program to exit early
@@ -26,6 +34,12 @@ abstract class SparkJob[ConfigType <: JobConfig] {
       case Success(_) =>
     }
     val ran = run(runId)
+
+    val outcome = ran.asOutcome
+    val mergedStats =
+      LineageStatistics.mergeLatest(inputStats, outcome.lineageStats)
+    val mergedSchemas =
+      LineageSchema.mergeLatest(inputSchemas, outcome.lineageSchemas)
 
     ran match {
       case Right(success) =>
@@ -36,8 +50,8 @@ abstract class SparkJob[ConfigType <: JobConfig] {
           config,
           runId,
           endTime,
-          lineageStats,
-          lineageSchemas
+          mergedStats,
+          mergedSchemas
         ) match {
           case Failure(cause) =>
             logger.error(
@@ -58,8 +72,8 @@ abstract class SparkJob[ConfigType <: JobConfig] {
           config,
           runId,
           endTime,
-          lineageStats,
-          lineageSchemas
+          mergedStats,
+          mergedSchemas
         ) match {
           case Failure(cause) =>
             logger.error(
@@ -80,5 +94,29 @@ abstract class SparkJob[ConfigType <: JobConfig] {
       config: ConfigType,
       lineage: LineageService
   ): Either[JobFailed, JobSucceeded]
+
+  private def getInputStats()(implicit
+      spark: SparkSession,
+      config: ConfigType
+  ): Map[Table, LineageStatistics] = {
+    config.inputs.flatMap { table =>
+      LineageStatistics.fromCatalog(table) match {
+        case Some(value) => Some(table, value)
+        case None        => None
+      }
+    }.toMap
+  }
+
+  private def getInputSchemas()(implicit
+      spark: SparkSession,
+      config: ConfigType
+  ): Map[Table, LineageSchema] = {
+    config.inputs.flatMap { table =>
+      LineageSchema.fromCatalog(table) match {
+        case Some(value) => Some(table, value)
+        case None        => None
+      }
+    }.toMap
+  }
 
 }
