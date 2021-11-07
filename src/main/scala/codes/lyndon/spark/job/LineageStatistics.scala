@@ -51,9 +51,9 @@ object LineageStatistics {
     tableSource.`type` match {
       case S3FileSystem | LocalFileSystem => None
       case JDBC =>
-        if (catalog.tableExists(table.name, tableSource.name)) {
+        if (catalog.tableExists(tableSource.name, table.name)) {
           ExternalCatalogHelper
-            .currentStats(table.name, tableSource.name)
+            .currentStats(tableSource.name, table.name)
             .map(from)
         } else {
           None
