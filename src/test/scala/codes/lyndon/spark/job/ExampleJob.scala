@@ -1,6 +1,7 @@
 package codes.lyndon.spark.job
 
 import codes.lyndon.spark.{ExternalCatalogHelper, RecordCountListener}
+import codes.lyndon.spark.job.JobOutcome._
 import org.apache.spark.sql.catalyst.catalog.CatalogColumnStat
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.StringType
@@ -13,7 +14,8 @@ import scala.util.Try
 case class ExampleJobConfig(
     override val jobName: String,
     override val inputs: Seq[ReadTable],
-    override val outputs: Seq[WriteTable]
+    override val outputs: Seq[WriteTable],
+    count: Long
 ) extends JobConfig
 
 case class ExampleReadTable(
@@ -26,7 +28,7 @@ case class ExampleWriteTable(
     override val source: DataSource
 ) extends WriteTable
 
-object ExampleJob {
+object ExampleJob extends SparkJob[ExampleJobConfig] {
 
   private[this] val logger = LoggerFactory.getLogger(getClass)
 
@@ -37,61 +39,35 @@ object ExampleJob {
       Seq(),
       Seq(
         ExampleWriteTable("example", DataSource("tmp", LocalFileSystem, "/tmp"))
-      )
+      ),
+      100000L
     )
 
     implicit val lineageService: LineageService = new OpenLineageService(
       "example"
     )
 
-    val procs = Runtime.getRuntime.availableProcessors()
-
-    implicit val spark: SparkSession = SparkSession
-      .builder()
-      .master(s"local[$procs]")
-      .appName("example")
-      //.enableHiveSupport()
-      .getOrCreate()
+    implicit val spark: SparkSession = getSparkSession()
 
     val runId = UUID.randomUUID()
-    lineageService.startJob(jobConfig, runId)
 
-    val ran = run(100000L, runId)
+    runJob(runId)
 
-    ran.foreach { results =>
-      logger.info("Job completed")
-      val JobSuccess(lineageStats, lineageSchema) = results
-
-      lineageService.completeJob(
-        jobConfig,
-        runId,
-        lineageStats = lineageStats,
-        tableSchemas = lineageSchema
-      )
-    }
-
-    ran.failed.foreach { cause =>
-      logger.error("Job failed", cause)
-      lineageService.failJob(jobConfig, runId)
-    }
-
+    logger.info(s"Run ID: $runId")
     scala.io.StdIn.readLine()
   }
 
-  def run(
-      count: Long,
-      runId: UUID
-  )(implicit
+  override protected def run(runId: UUID)(implicit
       spark: SparkSession,
       config: ExampleJobConfig,
       lineage: LineageService
-  ): Try[JobSuccess] =
+  ): Either[JobFailed, JobSucceeded] =
     Try {
       import spark.implicits._
 
       val countListener = RecordCountListener()
       spark.sparkContext.addSparkListener(countListener)
-
+      val count = config.count
       val range = spark.range(count)
 
       val df = range
@@ -153,8 +129,21 @@ object ExampleJob {
         }
 
       val schema = (config.outputs.head, LineageSchema.from(df))
+      JobSucceeded(
+        lineageSchemas = Map(schema),
+        lineageStats = statTuple.toMap
+      )
+    }.asEither
 
-      JobSuccess(statTuple.toMap, Map(schema))
-    }
-
+  // In a production environment you'd provide this differently
+  private def getSparkSession(
+      procs: Int = Runtime.getRuntime.availableProcessors()
+  ): SparkSession = {
+    SparkSession
+      .builder()
+      .master(s"local[$procs]")
+      .appName("example")
+      //.enableHiveSupport
+      .getOrCreate()
+  }
 }

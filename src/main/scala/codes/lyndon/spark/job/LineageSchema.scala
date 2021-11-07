@@ -9,7 +9,11 @@ case class LineageSchema(
 object LineageSchema {
 
   def from(df: DataFrame): LineageSchema = {
-    LineageSchema(df.dtypes.toMap)
+    val fieldsToTypes = df.schema.fields.map { field =>
+      (field.name, field.dataType.sql)
+    }.toMap
+
+    LineageSchema(fieldsToTypes)
   }
 
 }

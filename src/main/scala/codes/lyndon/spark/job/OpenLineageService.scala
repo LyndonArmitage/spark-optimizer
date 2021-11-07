@@ -44,7 +44,9 @@ class OpenLineageService(
       lineageStats: Map[Table, LineageStatistics] = Map.empty,
       tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Try[Unit] = {
-    sendEvent(newEvent(config, runId, StartEvent, eventTime, lineageStats, tableSchemas))
+    sendEvent(
+      newEvent(config, runId, StartEvent, eventTime, lineageStats, tableSchemas)
+    )
   }
 
   override def completeJob(
@@ -54,23 +56,40 @@ class OpenLineageService(
       lineageStats: Map[Table, LineageStatistics] = Map.empty,
       tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Try[Unit] = {
-    sendEvent(newEvent(config, runId, CompleteEvent, eventTime, lineageStats, tableSchemas))
+    sendEvent(
+      newEvent(
+        config,
+        runId,
+        CompleteEvent,
+        eventTime,
+        lineageStats,
+        tableSchemas
+      )
+    )
   }
 
   override def abortJob(
       config: JobConfig,
       runId: UUID,
-      eventTime: ZonedDateTime = ZonedDateTime.now()
+      eventTime: ZonedDateTime = ZonedDateTime.now(),
+      lineageStats: Map[Table, LineageStatistics] = Map.empty,
+      tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Try[Unit] = {
-    sendEvent(newEvent(config, runId, AbortEvent, eventTime))
+    sendEvent(
+      newEvent(config, runId, AbortEvent, eventTime, lineageStats, tableSchemas)
+    )
   }
 
   override def failJob(
       config: JobConfig,
       runId: UUID,
-      eventTime: ZonedDateTime = ZonedDateTime.now()
+      eventTime: ZonedDateTime = ZonedDateTime.now(),
+      lineageStats: Map[Table, LineageStatistics] = Map.empty,
+      tableSchemas: Map[Table, LineageSchema] = Map.empty
   ): Try[Unit] = {
-    sendEvent(newEvent(config, runId, FailEvent, eventTime))
+    sendEvent(
+      newEvent(config, runId, FailEvent, eventTime, lineageStats, tableSchemas)
+    )
   }
 
   private def newEvent(
