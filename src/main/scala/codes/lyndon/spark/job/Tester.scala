@@ -22,7 +22,10 @@ object Tester {
   ) extends ReadTable
   private case class TestWriteTable(
       override val name: String,
-      override val source: DataSource
+      override val source: DataSource,
+      override val mode: String = OutputWriter.Overwrite.stringValue,
+      override val format: String = "parquet",
+      override val partitionBy: Seq[String] = Nil
   ) extends WriteTable
 
   def main(args: Array[String]): Unit = {

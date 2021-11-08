@@ -9,7 +9,7 @@ import org.apache.spark.sql._
 import org.slf4j.LoggerFactory
 
 import java.util.UUID
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 case class ComplexExampleJobConfig(
     override val jobName: String,
@@ -25,7 +25,10 @@ case class ComplexExampleReadTable(
 
 case class ComplexExampleWriteTable(
     override val name: String,
-    override val source: DataSource
+    override val source: DataSource,
+    override val mode: String = OutputWriter.Overwrite.stringValue,
+    override val format: String = "parquet",
+    override val partitionBy: Seq[String] = Nil
 ) extends WriteTable
 
 object ComplexExampleJob extends SparkJob[ComplexExampleJobConfig] {
@@ -37,10 +40,16 @@ object ComplexExampleJob extends SparkJob[ComplexExampleJobConfig] {
     implicit val jobConfig: ComplexExampleJobConfig = ComplexExampleJobConfig(
       "Complex Example Job",
       Seq(
-        ComplexExampleReadTable("hardcoded", DataSource("default", JDBC, "jdbc://default"))
+        ComplexExampleReadTable(
+          "hardcoded",
+          DataSource("default", JDBC, "jdbc://default")
+        )
       ),
       Seq(
-        ComplexExampleWriteTable("example", DataSource("tmp", LocalFileSystem, "/tmp"))
+        ComplexExampleWriteTable(
+          "example",
+          DataSource("tmp", LocalFileSystem, "/tmp")
+        )
       ),
       100000L
     )
@@ -51,7 +60,8 @@ object ComplexExampleJob extends SparkJob[ComplexExampleJobConfig] {
 
     implicit val spark: SparkSession = getSparkSession()
 
-    spark.range(1000L)
+    spark
+      .range(1000L)
       .withColumn("random", rand())
       .write
       .format("parquet")
@@ -71,17 +81,16 @@ object ComplexExampleJob extends SparkJob[ComplexExampleJobConfig] {
       spark: SparkSession,
       config: ComplexExampleJobConfig,
       lineage: LineageService
-  ): Either[JobFailed, JobSucceeded] =
+  ): Either[JobFailed, JobSucceeded] = {
     Try {
       import spark.implicits._
 
       val countListener = RecordCountListener()
       spark.sparkContext.addSparkListener(countListener)
-      val count = config.count
-      val range = spark.range(count)
 
       val hardcodedTable = config.inputs.head
-      val hardcoded = spark.table(s"${hardcodedTable.source.name}.${hardcodedTable.name}")
+      val hardcoded =
+        spark.table(s"${hardcodedTable.source.name}.${hardcodedTable.name}")
 
       val df = hardcoded
         .withColumnRenamed("0", "id")
@@ -92,52 +101,42 @@ object ComplexExampleJob extends SparkJob[ComplexExampleJobConfig] {
         .withColumn("is_odd", !$"is_even")
         .withColumn("remainder", $"id" % 10)
 
-      val db          = spark.catalog.currentDatabase
       val outputTable = config.outputs.head
-      val table       = outputTable.name
-      val outputPath  = outputTable.source.locationURI.resolve(table).toString
-      logger.info(s"Writing out $table to $outputPath")
-      df.write
-        .format("parquet")
-        .mode(SaveMode.Overwrite)
-        .option("path", outputPath)
-        .partitionBy("remainder")
-        .saveAsTable(s"$db.$table")
+      val outputMap = Map(outputTable -> df)
 
-      val stats = ExternalCatalogHelper.PreCollectedStats(
-        Some(countListener.totalRecordsWritten),
-        Some(countListener.totalBytesWritten),
-        Map(
-          "id" -> CatalogColumnStat(
-            distinctCount = Some(countListener.totalRecordsWritten),
-            min = Some("0"),
-            max = Some(s"$count"),
-            nullCount = Some(0)
-          )
-        )
-      )
-
-      ExternalCatalogHelper.updateStats(db, table, stats)
-      countListener.reset()
-
-      ExternalCatalogHelper
-        .currentStats(db, table)
-        .foreach(stats => logger.info(s"Stats:\n$stats"))
-
-      val out1StatTuple =
-      (config.outputs.head, LineageStatistics.from(stats)) match {
-        case (table, Some(stats)) => Some(table, stats)
-        case _                    => None
-      }
+      // TODO: This should be brought up into SparkJob
+      val outcome: Either[JobFailed, JobSucceeded] =
+        OutputWriter(outputMap, Some(countListener)) match {
+          case Failure(cause) =>
+            Left(
+              JobFailed(
+                "Failed to write",
+                cause = Some(cause)
+              )
+            )
+          case Success((writeSchemas, writeStats)) =>
+            Right(
+              JobSucceeded(
+                lineageSchemas = writeSchemas.toMap,
+                lineageStats = writeStats.toMap
+              )
+            )
+        }
 
       spark.sparkContext.removeSparkListener(countListener)
 
-      val out1Schema = (config.outputs.head, LineageSchema.from(df))
-      JobSucceeded(
-        lineageSchemas = Map(out1Schema),
-        lineageStats = out1StatTuple.toMap
-      )
-    }.asEither
+      outcome
+    } match {
+      case Success(value) => value
+      case Failure(cause) =>
+        Left(
+          JobFailed(
+            cause.getMessage,
+            cause = Some(cause)
+          )
+        )
+    }
+  }
 
   // In a production environment you'd provide this differently
   private def getSparkSession(

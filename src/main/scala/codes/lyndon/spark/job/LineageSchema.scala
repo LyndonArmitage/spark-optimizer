@@ -39,6 +39,13 @@ object LineageSchema {
     }
   }
 
+  def mergeReadWrites(
+      reads: Map[ReadTable, LineageSchema],
+      writes: Map[WriteTable, LineageSchema]
+  ): Map[Table, LineageSchema] = {
+    mergeLatest(reads.toMap, writes.toMap)
+  }
+
   def merge(
       a: Map[Table, LineageSchema],
       b: Map[Table, LineageSchema]

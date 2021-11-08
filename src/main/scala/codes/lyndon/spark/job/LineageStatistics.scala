@@ -61,6 +61,13 @@ object LineageStatistics {
     }
   }
 
+  def mergeReadWrites(
+      reads: Map[ReadTable, LineageStatistics],
+      writes: Map[WriteTable, LineageStatistics]
+  ): Map[Table, LineageStatistics] = {
+    mergeLatest(reads.toMap, writes.toMap)
+  }
+
   def merge(
       a: Map[Table, LineageStatistics],
       b: Map[Table, LineageStatistics]

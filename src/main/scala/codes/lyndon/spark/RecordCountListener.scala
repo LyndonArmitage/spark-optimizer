@@ -15,6 +15,12 @@ import scala.collection.JavaConverters._
   *
   * Additionally you can get individual count information based on the tasks that
   * have executed, this could be useful for judging if writes are skewed.
+  *
+  * <strong>Important Note on Writing:</strong>
+  *
+  * If you are writing more than 1 output this record count listener will not be
+  * of limited use as it will count all writes within a Spark Job. You can
+  * mitigate this by carefully resetting it between stages
   */
 final case class RecordCountListener() extends SparkListener {
 

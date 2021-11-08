@@ -18,14 +18,14 @@ abstract class SparkJob[ConfigType <: JobConfig] {
     val job = s"${config.jobName}:$runId"
     logger.info(s"Starting job: $job")
 
-    val inputStats   = getInputStats()
-    val inputSchemas = getInputSchemas()
+    val inputStats   = getReadStats()
+    val inputSchemas = getReadSchemas()
 
     lineage.startJob(
       config,
       runId,
-      lineageStats = inputStats,
-      tableSchemas = inputSchemas
+      lineageStats = inputStats.toMap,
+      tableSchemas = inputSchemas.toMap
     ) match {
       case Failure(cause) =>
         logger.error("Could not reach lineage service to start job.")
@@ -37,9 +37,9 @@ abstract class SparkJob[ConfigType <: JobConfig] {
 
     val outcome = ran.asOutcome
     val mergedStats =
-      LineageStatistics.mergeLatest(inputStats, outcome.lineageStats)
+      LineageStatistics.mergeLatest(inputStats.toMap, outcome.lineageStats)
     val mergedSchemas =
-      LineageSchema.mergeLatest(inputSchemas, outcome.lineageSchemas)
+      LineageSchema.mergeLatest(inputSchemas.toMap, outcome.lineageSchemas)
 
     ran match {
       case Right(success) =>
@@ -95,10 +95,10 @@ abstract class SparkJob[ConfigType <: JobConfig] {
       lineage: LineageService
   ): Either[JobFailed, JobSucceeded]
 
-  private def getInputStats()(implicit
+  final protected def getReadStats()(implicit
       spark: SparkSession,
       config: ConfigType
-  ): Map[Table, LineageStatistics] = {
+  ): Map[ReadTable, LineageStatistics] = {
     config.inputs.flatMap { table =>
       LineageStatistics.fromCatalog(table) match {
         case Some(value) => Some(table, value)
@@ -107,10 +107,10 @@ abstract class SparkJob[ConfigType <: JobConfig] {
     }.toMap
   }
 
-  private def getInputSchemas()(implicit
+  final protected def getReadSchemas()(implicit
       spark: SparkSession,
       config: ConfigType
-  ): Map[Table, LineageSchema] = {
+  ): Map[ReadTable, LineageSchema] = {
     config.inputs.flatMap { table =>
       LineageSchema.fromCatalog(table) match {
         case Some(value) => Some(table, value)
